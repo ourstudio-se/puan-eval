@@ -6,8 +6,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .out_dir("src")
         .compile(
             &[
-                "proto/puan_core.proto",
-                "proto/puan_eval.proto"
+                "puan-proto/puan_core.proto",
+                "puan-proto/puan_eval.proto"
             ], // Add sdic.proto here
             &["proto/"], // Add the directory containing your proto files
         )?;
