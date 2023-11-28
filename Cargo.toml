@@ -13,6 +13,7 @@ path = "src/server.rs"
 tokio = { version = "1", features = ["full"] }
 tonic = "0.10.2"
 prost = "0.12.3"
+tokio-stream = { version = "0.1.14", features = ["full"] }
 
 [build-dependencies]
 tonic-build = "0.10.2"

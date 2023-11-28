@@ -26,20 +26,28 @@ pub struct PropositionInterpretationPair {
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct EvaluationRequest {
-    /// The proposition-interpretation pairs to evaluate.
+pub struct PropositionInterpretationSet {
+    /// The proposition to interpret.
     #[prost(message, repeated, tag = "1")]
-    pub proposition_interpretation_pairs: ::prost::alloc::vec::Vec<
-        PropositionInterpretationPair,
-    >,
+    pub propositions: ::prost::alloc::vec::Vec<super::puan_core::Composite>,
+    /// The interpretation to interpret the proposition with.
+    #[prost(message, repeated, tag = "2")]
+    pub interpretations: ::prost::alloc::vec::Vec<Interpretation>,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct EvaluationResponse {
+pub struct BoundSet {
+    #[prost(message, repeated, tag = "1")]
+    pub bounds: ::prost::alloc::vec::Vec<super::puan_core::Bound>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct BoundCollection {
     /// The evaluated propositions are bounds. If the lower and upper bound
     /// are equal, the proposition is a fact or definite.
+    /// This is a set of sets of bounds.
     #[prost(message, repeated, tag = "1")]
-    pub evaluated: ::prost::alloc::vec::Vec<super::puan_core::Bound>,
+    pub bound_sets: ::prost::alloc::vec::Vec<BoundSet>,
 }
 /// Generated client implementations.
 pub mod evaluation_service_client {
@@ -129,9 +137,9 @@ pub mod evaluation_service_client {
         /// Evaluates the given proposition-interpretation pairs.
         pub async fn evaluate(
             &mut self,
-            request: impl tonic::IntoRequest<super::EvaluationRequest>,
+            request: impl tonic::IntoRequest<super::PropositionInterpretationSet>,
         ) -> std::result::Result<
-            tonic::Response<super::EvaluationResponse>,
+            tonic::Response<super::BoundCollection>,
             tonic::Status,
         > {
             self.inner
@@ -152,6 +160,33 @@ pub mod evaluation_service_client {
                 .insert(GrpcMethod::new("puan_eval.EvaluationService", "Evaluate"));
             self.inner.unary(req, path, codec).await
         }
+        pub async fn evaluate_pair(
+            &mut self,
+            request: impl tonic::IntoStreamingRequest<
+                Message = super::PropositionInterpretationPair,
+            >,
+        ) -> std::result::Result<
+            tonic::Response<tonic::codec::Streaming<super::super::puan_core::Bound>>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/puan_eval.EvaluationService/EvaluatePair",
+            );
+            let mut req = request.into_streaming_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("puan_eval.EvaluationService", "EvaluatePair"));
+            self.inner.streaming(req, path, codec).await
+        }
     }
 }
 /// Generated server implementations.
@@ -164,9 +199,21 @@ pub mod evaluation_service_server {
         /// Evaluates the given proposition-interpretation pairs.
         async fn evaluate(
             &self,
-            request: tonic::Request<super::EvaluationRequest>,
+            request: tonic::Request<super::PropositionInterpretationSet>,
+        ) -> std::result::Result<tonic::Response<super::BoundCollection>, tonic::Status>;
+        /// Server streaming response type for the EvaluatePair method.
+        type EvaluatePairStream: tonic::codegen::tokio_stream::Stream<
+                Item = std::result::Result<super::super::puan_core::Bound, tonic::Status>,
+            >
+            + Send
+            + 'static;
+        async fn evaluate_pair(
+            &self,
+            request: tonic::Request<
+                tonic::Streaming<super::PropositionInterpretationPair>,
+            >,
         ) -> std::result::Result<
-            tonic::Response<super::EvaluationResponse>,
+            tonic::Response<Self::EvaluatePairStream>,
             tonic::Status,
         >;
     }
@@ -254,16 +301,16 @@ pub mod evaluation_service_server {
                     struct EvaluateSvc<T: EvaluationService>(pub Arc<T>);
                     impl<
                         T: EvaluationService,
-                    > tonic::server::UnaryService<super::EvaluationRequest>
+                    > tonic::server::UnaryService<super::PropositionInterpretationSet>
                     for EvaluateSvc<T> {
-                        type Response = super::EvaluationResponse;
+                        type Response = super::BoundCollection;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
                             tonic::Status,
                         >;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::EvaluationRequest>,
+                            request: tonic::Request<super::PropositionInterpretationSet>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
@@ -291,6 +338,57 @@ pub mod evaluation_service_server {
                                 max_encoding_message_size,
                             );
                         let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/puan_eval.EvaluationService/EvaluatePair" => {
+                    #[allow(non_camel_case_types)]
+                    struct EvaluatePairSvc<T: EvaluationService>(pub Arc<T>);
+                    impl<
+                        T: EvaluationService,
+                    > tonic::server::StreamingService<
+                        super::PropositionInterpretationPair,
+                    > for EvaluatePairSvc<T> {
+                        type Response = super::super::puan_core::Bound;
+                        type ResponseStream = T::EvaluatePairStream;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::ResponseStream>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<
+                                tonic::Streaming<super::PropositionInterpretationPair>,
+                            >,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as EvaluationService>::evaluate_pair(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = EvaluatePairSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.streaming(method, req).await;
                         Ok(res)
                     };
                     Box::pin(fut)
