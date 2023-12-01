@@ -2,7 +2,7 @@ mod puan_eval;
 mod puan_core;
 
 use puan_eval::evaluation_service_server::{EvaluationService, EvaluationServiceServer};
-use puan_eval::{PropositionInterpretationSet, BoundCollection, BoundSet, Interpretation, PropositionInterpretationPair};
+use puan_eval::{PropositionInterpretationSet, BoundCollection, BoundSet, Interpretation, PropositionInterpretationPair, PropositionInterpretationPairSet};
 use puan_core::{Composite, Bound, variable};
 
 use tonic::{transport::Server, Request, Response, Status};
@@ -70,7 +70,24 @@ struct PuanEvaluationService;
 #[tonic::async_trait]
 impl EvaluationService for PuanEvaluationService {
 
-    async fn evaluate(
+    async fn evaluate_pairs(
+        &self,
+        request: Request<PropositionInterpretationPairSet>,
+    ) -> Result<Response<BoundSet>, Status> {
+        let evaluation_request = request.into_inner();
+        Ok(Response::new(
+            BoundSet {
+                bounds: evaluation_request.pairs.into_iter().map(|pair| {
+                    evaluate(
+                        &pair.proposition.unwrap(), 
+                        &interpretation_map_from(&pair.interpretation.unwrap())
+                    )
+                }).collect()
+            }
+        ))
+    }
+
+    async fn evaluate_product(
         &self,
         request: Request<PropositionInterpretationSet>,
     ) -> Result<Response<BoundCollection>, Status> {
@@ -86,12 +103,12 @@ impl EvaluationService for PuanEvaluationService {
         }))
     }
 
-    type EvaluatePairStream = Pin<Box<dyn Stream<Item = Result<Bound, Status>> + Send + 'static>>;
+    type EvaluatePairStreamedStream = Pin<Box<dyn Stream<Item = Result<Bound, Status>> + Send + 'static>>;
     
-    async fn evaluate_pair(
+    async fn evaluate_pair_streamed(
         &self,
         request: Request<tonic::Streaming<PropositionInterpretationPair>>,
-    ) -> Result<Response<Self::EvaluatePairStream>, Status> {
+    ) -> Result<Response<Self::EvaluatePairStreamedStream>, Status> {
         
         let mut stream = request.into_inner();
 
@@ -127,7 +144,7 @@ impl EvaluationService for PuanEvaluationService {
         });
 
         let stream = UnboundedReceiverStream::new(rx);
-        Ok(Response::new(Box::pin(stream) as Self::EvaluatePairStream))
+        Ok(Response::new(Box::pin(stream) as Self::EvaluatePairStreamedStream))
 
     }
 }

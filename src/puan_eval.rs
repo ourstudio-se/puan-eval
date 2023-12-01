@@ -26,6 +26,12 @@ pub struct PropositionInterpretationPair {
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
+pub struct PropositionInterpretationPairSet {
+    #[prost(message, repeated, tag = "1")]
+    pub pairs: ::prost::alloc::vec::Vec<PropositionInterpretationPair>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct PropositionInterpretationSet {
     /// The proposition to interpret.
     #[prost(message, repeated, tag = "1")]
@@ -134,14 +140,11 @@ pub mod evaluation_service_client {
             self.inner = self.inner.max_encoding_message_size(limit);
             self
         }
-        /// Evaluates the given proposition-interpretation pairs.
-        pub async fn evaluate(
+        /// Evaluates the given proposition-interpretation pairs, either streamed or not.
+        pub async fn evaluate_pairs(
             &mut self,
-            request: impl tonic::IntoRequest<super::PropositionInterpretationSet>,
-        ) -> std::result::Result<
-            tonic::Response<super::BoundCollection>,
-            tonic::Status,
-        > {
+            request: impl tonic::IntoRequest<super::PropositionInterpretationPairSet>,
+        ) -> std::result::Result<tonic::Response<super::BoundSet>, tonic::Status> {
             self.inner
                 .ready()
                 .await
@@ -153,14 +156,14 @@ pub mod evaluation_service_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/puan_eval.EvaluationService/Evaluate",
+                "/puan_eval.EvaluationService/EvaluatePairs",
             );
             let mut req = request.into_request();
             req.extensions_mut()
-                .insert(GrpcMethod::new("puan_eval.EvaluationService", "Evaluate"));
+                .insert(GrpcMethod::new("puan_eval.EvaluationService", "EvaluatePairs"));
             self.inner.unary(req, path, codec).await
         }
-        pub async fn evaluate_pair(
+        pub async fn evaluate_pair_streamed(
             &mut self,
             request: impl tonic::IntoStreamingRequest<
                 Message = super::PropositionInterpretationPair,
@@ -180,12 +183,45 @@ pub mod evaluation_service_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/puan_eval.EvaluationService/EvaluatePair",
+                "/puan_eval.EvaluationService/EvaluatePairStreamed",
             );
             let mut req = request.into_streaming_request();
             req.extensions_mut()
-                .insert(GrpcMethod::new("puan_eval.EvaluationService", "EvaluatePair"));
+                .insert(
+                    GrpcMethod::new(
+                        "puan_eval.EvaluationService",
+                        "EvaluatePairStreamed",
+                    ),
+                );
             self.inner.streaming(req, path, codec).await
+        }
+        /// Evaluates the given proposition-interpretation sets.
+        pub async fn evaluate_product(
+            &mut self,
+            request: impl tonic::IntoRequest<super::PropositionInterpretationSet>,
+        ) -> std::result::Result<
+            tonic::Response<super::BoundCollection>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/puan_eval.EvaluationService/EvaluateProduct",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("puan_eval.EvaluationService", "EvaluateProduct"),
+                );
+            self.inner.unary(req, path, codec).await
         }
     }
 }
@@ -196,26 +232,31 @@ pub mod evaluation_service_server {
     /// Generated trait containing gRPC methods that should be implemented for use with EvaluationServiceServer.
     #[async_trait]
     pub trait EvaluationService: Send + Sync + 'static {
-        /// Evaluates the given proposition-interpretation pairs.
-        async fn evaluate(
+        /// Evaluates the given proposition-interpretation pairs, either streamed or not.
+        async fn evaluate_pairs(
             &self,
-            request: tonic::Request<super::PropositionInterpretationSet>,
-        ) -> std::result::Result<tonic::Response<super::BoundCollection>, tonic::Status>;
-        /// Server streaming response type for the EvaluatePair method.
-        type EvaluatePairStream: tonic::codegen::tokio_stream::Stream<
+            request: tonic::Request<super::PropositionInterpretationPairSet>,
+        ) -> std::result::Result<tonic::Response<super::BoundSet>, tonic::Status>;
+        /// Server streaming response type for the EvaluatePairStreamed method.
+        type EvaluatePairStreamedStream: tonic::codegen::tokio_stream::Stream<
                 Item = std::result::Result<super::super::puan_core::Bound, tonic::Status>,
             >
             + Send
             + 'static;
-        async fn evaluate_pair(
+        async fn evaluate_pair_streamed(
             &self,
             request: tonic::Request<
                 tonic::Streaming<super::PropositionInterpretationPair>,
             >,
         ) -> std::result::Result<
-            tonic::Response<Self::EvaluatePairStream>,
+            tonic::Response<Self::EvaluatePairStreamedStream>,
             tonic::Status,
         >;
+        /// Evaluates the given proposition-interpretation sets.
+        async fn evaluate_product(
+            &self,
+            request: tonic::Request<super::PropositionInterpretationSet>,
+        ) -> std::result::Result<tonic::Response<super::BoundCollection>, tonic::Status>;
     }
     #[derive(Debug)]
     pub struct EvaluationServiceServer<T: EvaluationService> {
@@ -296,25 +337,29 @@ pub mod evaluation_service_server {
         fn call(&mut self, req: http::Request<B>) -> Self::Future {
             let inner = self.inner.clone();
             match req.uri().path() {
-                "/puan_eval.EvaluationService/Evaluate" => {
+                "/puan_eval.EvaluationService/EvaluatePairs" => {
                     #[allow(non_camel_case_types)]
-                    struct EvaluateSvc<T: EvaluationService>(pub Arc<T>);
+                    struct EvaluatePairsSvc<T: EvaluationService>(pub Arc<T>);
                     impl<
                         T: EvaluationService,
-                    > tonic::server::UnaryService<super::PropositionInterpretationSet>
-                    for EvaluateSvc<T> {
-                        type Response = super::BoundCollection;
+                    > tonic::server::UnaryService<
+                        super::PropositionInterpretationPairSet,
+                    > for EvaluatePairsSvc<T> {
+                        type Response = super::BoundSet;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
                             tonic::Status,
                         >;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::PropositionInterpretationSet>,
+                            request: tonic::Request<
+                                super::PropositionInterpretationPairSet,
+                            >,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as EvaluationService>::evaluate(&inner, request).await
+                                <T as EvaluationService>::evaluate_pairs(&inner, request)
+                                    .await
                             };
                             Box::pin(fut)
                         }
@@ -326,7 +371,7 @@ pub mod evaluation_service_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let inner = inner.0;
-                        let method = EvaluateSvc(inner);
+                        let method = EvaluatePairsSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
@@ -342,16 +387,16 @@ pub mod evaluation_service_server {
                     };
                     Box::pin(fut)
                 }
-                "/puan_eval.EvaluationService/EvaluatePair" => {
+                "/puan_eval.EvaluationService/EvaluatePairStreamed" => {
                     #[allow(non_camel_case_types)]
-                    struct EvaluatePairSvc<T: EvaluationService>(pub Arc<T>);
+                    struct EvaluatePairStreamedSvc<T: EvaluationService>(pub Arc<T>);
                     impl<
                         T: EvaluationService,
                     > tonic::server::StreamingService<
                         super::PropositionInterpretationPair,
-                    > for EvaluatePairSvc<T> {
+                    > for EvaluatePairStreamedSvc<T> {
                         type Response = super::super::puan_core::Bound;
-                        type ResponseStream = T::EvaluatePairStream;
+                        type ResponseStream = T::EvaluatePairStreamedStream;
                         type Future = BoxFuture<
                             tonic::Response<Self::ResponseStream>,
                             tonic::Status,
@@ -364,7 +409,10 @@ pub mod evaluation_service_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as EvaluationService>::evaluate_pair(&inner, request)
+                                <T as EvaluationService>::evaluate_pair_streamed(
+                                        &inner,
+                                        request,
+                                    )
                                     .await
                             };
                             Box::pin(fut)
@@ -377,7 +425,7 @@ pub mod evaluation_service_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let inner = inner.0;
-                        let method = EvaluatePairSvc(inner);
+                        let method = EvaluatePairStreamedSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
@@ -389,6 +437,53 @@ pub mod evaluation_service_server {
                                 max_encoding_message_size,
                             );
                         let res = grpc.streaming(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/puan_eval.EvaluationService/EvaluateProduct" => {
+                    #[allow(non_camel_case_types)]
+                    struct EvaluateProductSvc<T: EvaluationService>(pub Arc<T>);
+                    impl<
+                        T: EvaluationService,
+                    > tonic::server::UnaryService<super::PropositionInterpretationSet>
+                    for EvaluateProductSvc<T> {
+                        type Response = super::BoundCollection;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::PropositionInterpretationSet>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as EvaluationService>::evaluate_product(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = EvaluateProductSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
                         Ok(res)
                     };
                     Box::pin(fut)
